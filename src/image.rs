@@ -7,7 +7,9 @@ use crate::util;
 
 const __MODULE__: &str = "image";
 
-const FILE_TYPES: [&str; 5] = [".png", ".jpg", ".jpeg", ".jpe", ".gif"];
+const FILE_TYPES: [&str; 13] = [
+    ".png", ".jpg", ".jpeg", ".jpe", ".gif", ".webp", ".bmp", ".ico", ".tiff", ".tif", ".tga", ".dds", ".hdr",
+];
 
 fn is_image(name: &str) -> bool {
     let lower = name.to_lowercase();

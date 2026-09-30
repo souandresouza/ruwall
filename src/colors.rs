@@ -11,7 +11,12 @@ const __MODULE__: &str = "colors";
 
 /// The color backends shipped with this port.
 pub fn list_backends() -> Vec<String> {
-    vec!["wal".to_string()]
+    vec![
+        "wal".to_string(),
+        "colorz".to_string(),
+        "colorthief".to_string(),
+        "haishoku".to_string(),
+    ]
 }
 
 pub fn get_backend(backend: &str) -> String {
@@ -76,10 +81,17 @@ pub fn get(img: &str, light: bool, backend: &str, sat: Option<&str>) -> Theme {
         let backend = get_backend(backend);
         util::log_info(__MODULE__, &format!("Using {} backend.", backend));
 
-        let colors = backend::get(Path::new(img), light, 16).unwrap_or_else(|e| {
+        let colors = match backend.as_str() {
+            "colorz" => backend::get_colorz(Path::new(img), light, 16),
+            "colorthief" => backend::get_colorthief(Path::new(img), light, 16),
+            "haishoku" => backend::get_haishoku(Path::new(img), light, 16),
+            _ => backend::get(Path::new(img), light, 16),
+        }
+        .unwrap_or_else(|e| {
             util::log_error(__MODULE__, &e);
             std::process::exit(1)
         });
+
         let colors = saturate_colors(colors, sat);
         let theme = Theme::from_palette(&colors, img);
 

@@ -1,0 +1,27 @@
+pkgbase = ruwall
+	pkgdesc = Generate and change color-schemes on the fly (Rust port of pywal)
+	pkgver = 3.3.1
+	pkgrel = 1
+	url = https://github.com/souandresouza/ruwall
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cargo
+	makedepends = rust
+	depends = imagemagick
+	depends = feh
+	depends = nitrogen
+	depends = xrdb
+	optdepends = python2: GTK2 reload support
+	optdepends = i3-wm: i3 reload support
+	optdepends = sway: sway reload support
+	optdepends = polybar: polybar reload support
+	optdepends = kitty: kitty terminal support
+	optdepends = bspwm: bspwm reload support
+	conflicts = python-pywal
+	conflicts = python-pywal16
+	provides = wal
+	source = ruwall-3.3.1.tar.gz::https://github.com/souandresouza/ruwall/archive/v3.3.1.tar.gz
+	sha256sums = SKIP
+
+pkgname = ruwall

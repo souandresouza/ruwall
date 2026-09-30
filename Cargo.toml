@@ -10,7 +10,7 @@ readme = "README.md"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "ico", "tiff", "tga", "dds", "hdr", "exr", "pnm", "qoi"] }
 rand = "0.8"
 include_dir = "0.7"
 regex = "1"

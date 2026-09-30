@@ -9,6 +9,7 @@ use ruwall::theme::Theme;
 struct Cli {
     alpha: Option<String>,
     background: Option<String>,
+    foreground: Option<String>,
     backend: Option<String>,
     backend_given: bool,
     theme: Option<String>,
@@ -32,6 +33,7 @@ struct Cli {
     version: bool,
     cached_wallpaper: bool,
     no_env_reload: bool,
+    generate_only: bool,
 }
 
 impl Default for Cli {
@@ -39,6 +41,7 @@ impl Default for Cli {
         Cli {
             alpha: None,
             background: None,
+            foreground: None,
             backend: None,
             backend_given: false,
             theme: None,
@@ -62,6 +65,7 @@ impl Default for Cli {
             version: false,
             cached_wallpaper: false,
             no_env_reload: false,
+            generate_only: false,
         }
     }
 }
@@ -69,16 +73,17 @@ impl Default for Cli {
 fn print_help() {
     println!("ruwall - Generate colorschemes on the fly");
     println!();
-    println!("usage: ruwall [-h] [-a ALPHA] [-b BACKGROUND] [--backend [BACKEND]]");
+    println!("usage: ruwall [-h] [-a ALPHA] [-b BACKGROUND] [--fg FOREGROUND] [--backend [BACKEND]]");
     println!("            [-f FILE] [--iterative] [--recursive]");
     println!("            [--saturate SATURATE] [--preview] [--vte] [-c] [-i IMAGE]");
     println!("            [-l] [-n] [-o SCRIPT_NAME] [-p THEME_NAME] [-q] [-r] [-R]");
-    println!("            [-s] [-t] [-v] [-w] [-e]");
+    println!("            [-s] [-t] [-v] [-w] [-e] [-g]");
     println!();
     println!("options:");
     println!("  -h, --help            show this help message and exit");
     println!("  -a ALPHA              Set terminal background transparency. *Only works in URxvt*");
     println!("  -b BACKGROUND         Custom background color to use.");
+    println!("  --fg FOREGROUND       Custom foreground color to use.");
     println!("  --backend [BACKEND]   Which color backend to use.");
     println!("                        Use 'ruwall --backend' to list backends.");
     println!("  -f FILE, --theme [FILE]");
@@ -105,15 +110,16 @@ fn print_help() {
     println!("  -t                    Skip changing colors in tty.");
     println!("  -v                    Print \"ruwall\" version.");
     println!("  -w                    Use last used wallpaper for color generation.");
-    println!("  -e                    Skip reloading gtk/xrdb/i3/sway/polybar");
+    println!("  -e                    Skip reloading gtk/xrdb/i3/sway/polybar.");
+    println!("  -g                    Generate colorscheme only, don't apply.");
 }
 
 fn cli_error(message: &str) -> ! {
-    eprintln!("usage: ruwall [-h] [-a ALPHA] [-b BACKGROUND] [--backend [BACKEND]]");
+    eprintln!("usage: ruwall [-h] [-a ALPHA] [-b BACKGROUND] [--fg FOREGROUND] [--backend [BACKEND]]");
     eprintln!("            [-f FILE] [--iterative] [--recursive]");
     eprintln!("            [--saturate SATURATE] [--preview] [--vte] [-c] [-i IMAGE]");
     eprintln!("            [-l] [-n] [-o SCRIPT_NAME] [-p THEME_NAME] [-q] [-r] [-R]");
-    eprintln!("            [-s] [-t] [-v] [-w] [-e]");
+    eprintln!("            [-s] [-t] [-v] [-w] [-e] [-g]");
     eprintln!("wal: error: {}", message);
     std::process::exit(2);
 }
@@ -183,6 +189,9 @@ fn parse_args(raw: &[String]) -> Cli {
                 "saturate" => {
                     cli.saturate = Some(value_from(raw, &mut i, "--saturate"));
                 }
+                "fg" => {
+                    cli.foreground = Some(value_from(raw, &mut i, "--fg"));
+                }
                 "iterative" => cli.iterative = true,
                 "recursive" => cli.recursive = true,
                 "preview" => cli.preview = true,
@@ -242,6 +251,7 @@ fn parse_args(raw: &[String]) -> Cli {
                     't' => cli.skip_tty = true,
                     'v' => cli.version = true,
                     'w' => cli.cached_wallpaper = true,
+                    'g' => cli.generate_only = true,
                     'h' => {
                         print_help();
                         std::process::exit(0);
@@ -375,7 +385,13 @@ fn process(cli: &Cli) {
         colors_plain.colors.set(0, bg);
     }
 
-    if !cli.no_wallpaper {
+    if let Some(fg) = &cli.foreground {
+        let fg = format!("#{}", fg.trim_start_matches('#'));
+        colors_plain.special.foreground = fg.clone();
+        colors_plain.colors.set(15, fg);
+    }
+
+    if !cli.no_wallpaper && !cli.generate_only {
         wallpaper::change(&colors_plain.wallpaper);
     }
 
@@ -396,7 +412,7 @@ fn process(cli: &Cli) {
 
     export::every(&colors_plain, &cache_dir());
 
-    if !cli.no_env_reload {
+    if !cli.no_env_reload && !cli.generate_only {
         let xrdb_file = None;
         reload::env(xrdb_file, !cli.skip_tty);
     }
@@ -405,7 +421,7 @@ fn process(cli: &Cli) {
         util::disown(&[cmd]);
     }
 
-    if !cli.no_env_reload {
+    if !cli.no_env_reload && !cli.generate_only {
         reload::gtk();
     }
 }
