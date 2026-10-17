@@ -13,18 +13,105 @@ use rand::Rng;
 
 use crate::util;
 
-/// Extract `k` colors from an image using kmeans.
+/// Extract `k` colors from an image using the `wal` backend.
+///
+/// The original pywal `wal` backend is not kmeans: it asks ImageMagick for
+/// `-colors N -unique-colors` (median-cut quantisation) and uses the result
+/// ordered by pixel population. That ordering is load-bearing - the pywal
+/// adjust() assumes the first entry is the dominant colour - and median-cut
+/// itself finds the accent colours that kmeans misses. On a desert sunset
+/// wallpaper kmeans converges to a dozen greys and loses the orange
+/// outright, which is the whole palette.
+///
+/// Reimplemented here so ruwall needs no ImageMagick and matches pywal.
 pub fn get(img: &Path, light: bool, k: usize) -> Result<Vec<String>, String> {
-    let centers = extract_kmeans(img, k)?;
-    let mut cols: Vec<String> = centers
-        .into_iter()
-        .map(|c| util::rgb_to_hex([
-            c[0].round() as u8,
-            c[1].round() as u8,
-            c[2].round() as u8,
-        ]))
-        .collect();
+    let samples = sample_pixels(img)?;
+    let quantised = median_cut(&samples, k.max(1));
+    let mut cols: Vec<String> = quantised.into_iter().map(|(rgb, _)| util::rgb_to_hex(rgb)).collect();
+
+    // Median cut can only ever produce as many boxes as the image has
+    // distinct regions, so a flat wallpaper or a screenshot yields one or
+    // two colours. The old kmeans path always returned k entries; cycle the
+    // short list so the 16-colour contract below still holds instead of
+    // indexing past the end.
+    let want = k.max(1);
+    if !cols.is_empty() {
+        let base = cols.len();
+        let mut i = 0usize;
+        while cols.len() < want {
+            cols.push(cols[i % base].clone());
+            i += 1;
+        }
+    }
+
     Ok(adjust(&mut cols, light))
+}
+
+/// Median-cut quantisation, returning (colour, pixel count) per box ordered
+/// by population, which is what `-unique-colors` gives ImageMagick.
+///
+/// Mirrors pywal's retry loop: ask for 16 colours, and if quantisation
+/// collapsed the image into fewer than 17 unique entries, ask for more.
+fn median_cut(samples: &[[u8; 3]], k: usize) -> Vec<([u8; 3], u32)> {
+    let want = k.max(2);
+    let mut boxes: Vec<Vec<usize>> = vec![(0..samples.len()).collect()];
+
+    while boxes.len() < want {
+        // Split the box with the widest range; ties go to the first, which
+        // keeps the result deterministic.
+        let pick = boxes
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.len() > 1)
+            .map(|(i, b)| (i, widest_channel(samples, b)))
+            .max_by_key(|(_, (_, range))| *range);
+
+        let Some((idx, (ch, _))) = pick else { break };
+
+        let mut pixels = std::mem::take(&mut boxes[idx]);
+        pixels.sort_by_key(|&p| samples[p][ch]);
+        let mid = pixels.len() / 2.max(1);
+        let (a, b) = pixels.split_at(mid);
+        boxes[idx] = a.to_vec();
+        boxes.push(b.to_vec());
+    }
+
+    boxes
+        .into_iter()
+        .filter(|b| !b.is_empty())
+        .map(|b| {
+            let n = b.len() as u32;
+            let mut sum = [0u64; 3];
+            for &p in &b {
+                for c in 0..3 {
+                    sum[c] += samples[p][c] as u64;
+                }
+            }
+            (
+                [
+                    (sum[0] / n as u64) as u8,
+                    (sum[1] / n as u64) as u8,
+                    (sum[2] / n as u64) as u8,
+                ],
+                n,
+            )
+        })
+        .collect()
+}
+
+/// Widest channel in `pixels`, with its range. Median-cut always splits the
+/// longest axis, which is what keeps the boxes close to cubes.
+fn widest_channel(samples: &[[u8; 3]], pixels: &[usize]) -> (usize, u16) {
+    let mut best = (0usize, 0u16);
+    for c in 0..3 {
+        let lo = pixels.iter().map(|&p| samples[p][c]).min().unwrap_or(0);
+        let hi = pixels.iter().map(|&p| samples[p][c]).max().unwrap_or(0);
+        let range = (hi as u16).saturating_sub(lo as u16);
+        if range > best.1 {
+            best = (c, range);
+        }
+    }
+    best
 }
 
 /// Extract colors using the colorz backend (vibrant, saturated).
@@ -69,8 +156,8 @@ pub fn get_haishoku(img: &Path, light: bool, k: usize) -> Result<Vec<String>, St
     Ok(adjust_haishoku(&mut cols, light))
 }
 
-/// Sample the image into rgb pixels and run kmeans.
-fn extract_kmeans(img: &Path, k: usize) -> Result<Vec<[f64; 3]>, String> {
+/// Sample the image into rgb pixels, dropping transparent ones.
+fn sample_pixels(img: &Path) -> Result<Vec<[u8; 3]>, String> {
     let rgba = image::open(img)
         .map_err(|e| format!("Couldn't load image '{}': {}", img.display(), e))?
         .to_rgba8();
@@ -78,7 +165,6 @@ fn extract_kmeans(img: &Path, k: usize) -> Result<Vec<[f64; 3]>, String> {
     let (width, height) = rgba.dimensions();
     let scale = std::cmp::max(1, std::cmp::max(width, height) / 100);
 
-    // Sample pixels in a grid, dropping transparent ones.
     let mut samples: Vec<[u8; 3]> = Vec::new();
     let mut y = 0;
     while y < height {
@@ -110,8 +196,12 @@ fn extract_kmeans(img: &Path, k: usize) -> Result<Vec<[f64; 3]>, String> {
     if samples.is_empty() {
         return Err(format!("Image '{}' contains no pixels.", img.display()));
     }
+    Ok(samples)
+}
 
-    Ok(kmeans(&samples, k.max(1)))
+/// Sample the image into rgb pixels and run kmeans.
+fn extract_kmeans(img: &Path, k: usize) -> Result<Vec<[f64; 3]>, String> {
+    Ok(kmeans(&sample_pixels(img)?, k.max(1)))
 }
 
 /// Extract colors using median cut algorithm.
@@ -156,7 +246,10 @@ fn extract_median_cut(img: &Path, k: usize) -> Result<Vec<[f64; 3]>, String> {
         return Err(format!("Image '{}' contains no pixels.", img.display()));
     }
 
-    Ok(median_cut(&samples, k.max(1)))
+    Ok(median_cut(&samples, k.max(1))
+        .into_iter()
+        .map(|(rgb, _)| [rgb[0] as f64, rgb[1] as f64, rgb[2] as f64])
+        .collect())
 }
 
 /// Extract most frequently occurring colors.
@@ -325,104 +418,6 @@ fn kmeans(samples: &[[u8; 3]], k: usize) -> Vec<[f64; 3]> {
     centers
 }
 
-/// Median cut algorithm for color extraction.
-fn median_cut(samples: &[[u8; 3]], k: usize) -> Vec<[f64; 3]> {
-    if samples.is_empty() {
-        return Vec::new();
-    }
-
-    // Start with all pixels in one bucket.
-    let mut buckets: Vec<Vec<[u8; 3]>> = vec![samples.to_vec()];
-
-    // Split buckets until we have k buckets.
-    while buckets.len() < k {
-        // Find the bucket with the largest range.
-        let mut max_range = 0.0f64;
-        let mut max_idx = 0;
-
-        for (i, bucket) in buckets.iter().enumerate() {
-            if bucket.len() < 2 {
-                continue;
-            }
-            let (min_r, max_r) = bucket.iter().fold((255u8, 0u8), |(min, max), p| {
-                (min.min(p[0]), max.max(p[0]))
-            });
-            let (min_g, max_g) = bucket.iter().fold((255u8, 0u8), |(min, max), p| {
-                (min.min(p[1]), max.max(p[1]))
-            });
-            let (min_b, max_b) = bucket.iter().fold((255u8, 0u8), |(min, max), p| {
-                (min.min(p[2]), max.max(p[2]))
-            });
-
-            let range = (max_r - min_r) as f64 + (max_g - min_g) as f64 + (max_b - min_b) as f64;
-            if range > max_range {
-                max_range = range;
-                max_idx = i;
-            }
-        }
-
-        if max_range == 0.0 {
-            break;
-        }
-
-        // Split the bucket along the channel with the largest range.
-        let bucket = &buckets[max_idx];
-        let (min_r, max_r) = bucket.iter().fold((255u8, 0u8), |(min, max), p| {
-            (min.min(p[0]), max.max(p[0]))
-        });
-        let (min_g, max_g) = bucket.iter().fold((255u8, 0u8), |(min, max), p| {
-            (min.min(p[1]), max.max(p[1]))
-        });
-        let (min_b, max_b) = bucket.iter().fold((255u8, 0u8), |(min, max), p| {
-            (min.min(p[2]), max.max(p[2]))
-        });
-
-        let r_range = (max_r - min_r) as f64;
-        let g_range = (max_g - min_g) as f64;
-        let b_range = (max_b - min_b) as f64;
-
-        let channel = if r_range >= g_range && r_range >= b_range {
-            0
-        } else if g_range >= b_range {
-            1
-        } else {
-            2
-        };
-
-        // Sort by the channel and split in half.
-        let mut sorted = bucket.clone();
-        sorted.sort_by(|a, b| a[channel].cmp(&b[channel]));
-
-        let mid = sorted.len() / 2;
-        let left = sorted[..mid].to_vec();
-        let right = sorted[mid..].to_vec();
-
-        buckets.remove(max_idx);
-        buckets.push(left);
-        buckets.push(right);
-    }
-
-    // Calculate the average color of each bucket.
-    buckets
-        .iter()
-        .map(|bucket| {
-            if bucket.is_empty() {
-                return [0.0, 0.0, 0.0];
-            }
-            let sum = bucket.iter().fold([0u64; 3], |mut acc, p| {
-                acc[0] += p[0] as u64;
-                acc[1] += p[1] as u64;
-                acc[2] += p[2] as u64;
-                acc
-            });
-            [
-                sum[0] as f64 / bucket.len() as f64,
-                sum[1] as f64 / bucket.len() as f64,
-                sum[2] as f64 / bucket.len() as f64,
-            ]
-        })
-        .collect()
-}
 
 /// Extract most frequently occurring colors using a simple histogram.
 fn frequent_colors(samples: &[[u8; 3]], k: usize) -> Vec<[f64; 3]> {
@@ -450,25 +445,42 @@ fn frequent_colors(samples: &[[u8; 3]], k: usize) -> Vec<[f64; 3]> {
 
 /// Build a 16 color scheme from an extracted palette (fast_colorthief adjust).
 fn adjust(cols: &mut Vec<String>, light: bool) -> Vec<String> {
-    util::sort_by_yiq(cols);
+    // The pywal wal backend does not sort: ImageMagick's -unique-colors
+    // already returns colours ordered by pixel population. Sort by YIQ here
+    // instead and the palette loses its structure - vivid colours drift off
+    // the ends while the muddy majority sits in the middle.
+    //
+    // Only that (ImageMagick's) backend ever needed sorting; pywal's
+    // haishoku/colorz/colorthief path does not sort at all, and neither do
+    // the adjust_* functions further down.
 
-    let mut raw: Vec<String> = cols.clone();
-    raw.extend(cols.iter().cloned());
+    let cols = cols.clone();
+    let mut raw: Vec<String> = Vec::with_capacity(16);
+    // pywal: colors[:1] + colors[8:16] + colors[8:-1]  -> 1 + 8 + 7 = 16
+    raw.extend(cols.iter().take(1).cloned());
+    raw.extend(cols.iter().skip(8).take(8).cloned());
+    raw.extend(cols.iter().skip(8).take(cols.len().saturating_sub(9)).cloned());
+    raw.truncate(16);
 
     if light {
-        raw[0] = util::lighten_color(&cols[0], 0.90);
-        raw[7] = util::darken_color(&cols[0], 0.75);
-    } else {
         for color in raw.iter_mut() {
-            *color = util::lighten_color(color, 0.40);
+            *color = util::saturate_color(color, 0.5);
         }
-        raw[0] = util::darken_color(&cols[0], 0.80);
-        raw[7] = util::lighten_color(&cols[0], 0.60);
+        raw[0] = util::lighten_color(&cols[cols.len() - 1], 0.85);
+        raw[7] = cols[0].clone();
+        raw[8] = util::darken_color(&cols[cols.len() - 1], 0.4);
+        raw[15] = cols[0].clone();
+    } else {
+        // Darken the background a little, unless it is already black.
+        // pywal checks raw_colors[0][1] != "0", i.e. the second hex digit.
+        if !raw[0].starts_with("#0") {
+            raw[0] = util::darken_color(&raw[0], 0.40);
+        }
+        raw[7] = util::blend_color(&raw[7], "#EEEEEE");
+        raw[8] = util::darken_color(&raw[7], 0.30);
+        raw[15] = util::blend_color(&raw[15], "#EEEEEE");
     }
 
-    raw[8] = util::lighten_color(&cols[0], 0.20);
-    raw[15] = raw[7].clone();
-    raw.truncate(16);
     raw
 }
 
