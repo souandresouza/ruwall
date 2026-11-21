@@ -22,6 +22,6 @@ pkgbase = ruwall
 	conflicts = python-pywal
 	conflicts = python-pywal16
 	source = ruwall-3.3.2.tar.gz::https://github.com/souandresouza/ruwall/archive/refs/tags/v3.3.2.tar.gz
-	sha256sums = SKIP
+	sha256sums = f6b7b3f911d0613af199c61b701edbcb26f2e6b120cfd952caff9a422cfa2cc3
 
 pkgname = ruwall

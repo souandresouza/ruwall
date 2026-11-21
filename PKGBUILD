@@ -26,9 +26,7 @@ optdepends=(
 conflicts=('python-pywal' 'python-pywal16')
 provides=('wal')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/souandresouza/ruwall/archive/refs/tags/v${pkgver}.tar.gz")
-# Checksum for the v3.3.2 tarball is filled in on main after the tag is
-# pushed; a tagged PKGBUILD cannot contain the checksum of its own tarball.
-sha256sums=('SKIP')
+sha256sums=('f6b7b3f911d0613af199c61b701edbcb26f2e6b120cfd952caff9a422cfa2cc3')
 
 prepare() {
     cd "${pkgname}-${pkgver}"
