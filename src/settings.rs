@@ -1,5 +1,5 @@
-pub const __VERSION__: &str = "3.3.1";
-pub const __CACHE_VERSION__: &str = "1.1.0";
+pub const __VERSION__: &str = "3.3.2";
+pub const __CACHE_VERSION__: &str = "1.1.1";
 
 use std::path::PathBuf;
 

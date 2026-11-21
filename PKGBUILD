@@ -1,6 +1,6 @@
 # Maintainer: Andre <andre@example.com>
 pkgname=ruwall
-pkgver=3.3.1
+pkgver=3.3.2
 pkgrel=1
 pkgdesc="Generate and change color-schemes on the fly (Rust port of pywal)"
 arch=('x86_64' 'aarch64')
@@ -26,7 +26,9 @@ optdepends=(
 conflicts=('python-pywal' 'python-pywal16')
 provides=('wal')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/souandresouza/ruwall/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('7fd5cc03ca435fe1af2aadfe44027142da6797cef81359b33f0af4676c723ef9')
+# Checksum for the v3.3.2 tarball is filled in on main after the tag is
+# pushed; a tagged PKGBUILD cannot contain the checksum of its own tarball.
+sha256sums=('SKIP')
 
 prepare() {
     cd "${pkgname}-${pkgver}"

@@ -1,6 +1,6 @@
 pkgbase = ruwall
 	pkgdesc = Generate and change color-schemes on the fly (Rust port of pywal)
-	pkgver = 3.3.1
+	pkgver = 3.3.2
 	pkgrel = 1
 	url = https://github.com/souandresouza/ruwall
 	arch = x86_64
@@ -21,7 +21,7 @@ pkgbase = ruwall
 	provides = wal
 	conflicts = python-pywal
 	conflicts = python-pywal16
-	source = ruwall-3.3.1.tar.gz::https://github.com/souandresouza/ruwall/archive/refs/tags/v3.3.1.tar.gz
-	sha256sums = 7fd5cc03ca435fe1af2aadfe44027142da6797cef81359b33f0af4676c723ef9
+	source = ruwall-3.3.2.tar.gz::https://github.com/souandresouza/ruwall/archive/refs/tags/v3.3.2.tar.gz
+	sha256sums = SKIP
 
 pkgname = ruwall

@@ -15,7 +15,7 @@ fn colors_json(output_dir: &Path) -> Value {
 fn test_version() {
     let out = run_wal(&["-v"]);
     assert!(out.status.success());
-    assert!(common::stdout(&out).contains("ruwall 3.3.1"));
+    assert!(common::stdout(&out).contains("ruwall 3.3.2"));
 }
 
 #[test]

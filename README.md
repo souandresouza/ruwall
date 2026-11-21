@@ -36,9 +36,9 @@ ln -s ruwall ~/.local/bin/wal
 Or install from source with the included `PKGBUILD` (Arch Linux):
 
 ```sh
-curl -L https://github.com/souandresouza/ruwall/archive/refs/tags/v3.3.1.tar.gz -o ruwall.tar.gz
+curl -L https://github.com/souandresouza/ruwall/archive/refs/tags/v3.3.2.tar.gz -o ruwall.tar.gz
 tar xf ruwall.tar.gz
-cd ruwall-3.3.1
+cd ruwall-3.3.2
 makepkg -si
 ```
 
