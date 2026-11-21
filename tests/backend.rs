@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use ruwall::backend;
+use ruwall::{backend, util};
 
 fn write_test_image(path: &Path) {
     // A deterministic 4-colour block image.
@@ -49,6 +49,46 @@ fn test_backend_get_light() {
     let dark = backend::get(&img, false, 16).unwrap();
     assert_eq!(dark.len(), 16);
     assert_ne!(light, dark);
+}
+
+#[test]
+fn test_backend_get_orders_by_population() {
+    let dir = common::isolated_env();
+    let img = dir.join("dominant.png");
+
+    // 40% orange, with three smaller accents. pywal's adjust() uses the first
+    // quantised colour as the background, so the dominant colour must lead.
+    let mut image = image::RgbImage::new(200, 200);
+    for y in 0..200 {
+        for x in 0..200 {
+            let color = if x < 40 {
+                [6, 182, 212]
+            } else if x < 80 {
+                [250, 204, 21]
+            } else if x < 120 {
+                [168, 85, 247]
+            } else {
+                [249, 115, 22]
+            };
+            image.put_pixel(x, y, image::Rgb(color));
+        }
+    }
+    image.save(&img).unwrap();
+
+    let palette = backend::get(&img, false, 16).unwrap();
+    assert_eq!(palette.len(), 16);
+
+    // The dominant colour is warm. Before ordering by population the first
+    // entry was an arbitrary cyan box from the split order.
+    let [r, g, b] = util::hex_to_rgb(&palette[0]);
+    assert!(r > g && g > b, "background should be the warm dominant colour: {}", palette[0]);
+
+    let distinct: std::collections::HashSet<&String> = palette.iter().collect();
+    assert!(
+        distinct.len() >= 4,
+        "palette should keep the accent colours, got {:?}",
+        palette
+    );
 }
 
 #[test]

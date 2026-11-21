@@ -27,7 +27,7 @@ use crate::util;
 pub fn get(img: &Path, light: bool, k: usize) -> Result<Vec<String>, String> {
     let samples = sample_pixels(img)?;
     let quantised = median_cut(&samples, k.max(1));
-    let mut cols: Vec<String> = quantised.into_iter().map(|(rgb, _)| util::rgb_to_hex(rgb)).collect();
+    let mut cols = ordered_colors(quantised);
 
     // Median cut can only ever produce as many boxes as the image has
     // distinct regions, so a flat wallpaper or a screenshot yields one or
@@ -47,8 +47,30 @@ pub fn get(img: &Path, light: bool, k: usize) -> Result<Vec<String>, String> {
     Ok(adjust(&mut cols, light))
 }
 
-/// Median-cut quantisation, returning (colour, pixel count) per box ordered
-/// by population, which is what `-unique-colors` gives ImageMagick.
+/// Collapse identical quantised colours and order them by pixel population.
+///
+/// pywal's `adjust()` assumes the first entry is the dominant colour and that
+/// entries 8..16 are the less frequent accents. ImageMagick's `-unique-colors`
+/// provides that order; our median-cut boxes come out in split order, so the
+/// aggregation and sort here are load-bearing.
+fn ordered_colors(boxes: Vec<([u8; 3], u32)>) -> Vec<String> {
+    let mut counts: Vec<([u8; 3], u32)> = Vec::new();
+    for (rgb, n) in boxes {
+        if let Some(entry) = counts.iter_mut().find(|(color, _)| *color == rgb) {
+            entry.1 += n;
+        } else {
+            counts.push((rgb, n));
+        }
+    }
+
+    counts.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    counts
+        .into_iter()
+        .map(|(rgb, _)| util::rgb_to_hex(rgb))
+        .collect()
+}
+
+/// Median-cut quantisation, returning (colour, pixel count) per box.
 ///
 /// Mirrors pywal's retry loop: ask for 16 colours, and if quantisation
 /// collapsed the image into fewer than 17 unique entries, ask for more.

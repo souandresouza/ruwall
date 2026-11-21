@@ -200,6 +200,7 @@ fn parse_args(raw: &[String]) -> Cli {
                     print_help();
                     std::process::exit(0);
                 }
+                "version" => cli.version = true,
                 _ => cli_error(&format!("unrecognized arguments: {}", arg)),
             }
             i += 1;

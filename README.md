@@ -29,7 +29,22 @@ Requirements: a Rust toolchain (2021 edition, rustc 1.80+ recommended).
 cargo build --release
 # The binary lands in target/release/ruwall
 install -m755 target/release/ruwall ~/.local/bin/ruwall
+# Optional: keep pywal's executable name for existing scripts/keybindings
+ln -s ruwall ~/.local/bin/wal
 ```
+
+Or install from source with the included `PKGBUILD` (Arch Linux):
+
+```sh
+curl -L https://github.com/souandresouza/ruwall/archive/refs/tags/v3.3.1.tar.gz -o ruwall.tar.gz
+tar xf ruwall.tar.gz
+cd ruwall-3.3.1
+makepkg -si
+```
+
+The binary is self-contained. A wallpaper setter (`feh`, `nitrogen`, …) and
+`xorg-xrdb` are only needed if you want ruwall to change the wallpaper or
+merge X resources; they are optional dependencies in the `PKGBUILD`.
 
 ## Usage
 
@@ -70,7 +85,7 @@ original `wal`. This keeps existing scripts and templates working unchanged.
 | --- | --- |
 | `-a ALPHA` | Set terminal background transparency. Only works in URxvt. |
 | `-b BACKGROUND` | Custom background color to use. |
-| `--backend [BACKEND]` | Which color backend to use. There is one native backend, `wal` (kmeans). |
+| `--backend [BACKEND]` | Which color backend to use: `wal` (default, median-cut like pywal), `colorz`, `colorthief` or `haishoku`. |
 | `-f FILE, --theme [FILE]` | Which colorscheme file to use. Lists all themes without a value. |
 | `--iterative` | Pick images from a directory in order instead of shuffled. |
 | `--recursive` | Search a directory recursively for images. |
@@ -88,9 +103,10 @@ original `wal`. This keeps existing scripts and templates working unchanged.
 | `-R` | Restore the previous colorscheme. |
 | `-s` | Skip changing colors in terminals. |
 | `-t` | Skip changing colors in the Linux TTY. |
-| `-v` | Print the ruwall version. |
+| `-v`, `--version` | Print the ruwall version. |
 | `-w` | Use the cached wallpaper for color generation. |
 | `-e` | Skip reloading gtk/xrdb/i3/sway/polybar. |
+| `-g` | Generate the colorscheme only; don't apply wallpaper, sequences or reload programs. |
 
 ## Custom themes and templates
 
@@ -100,6 +116,22 @@ rendered on every run alongside the built-in ones. See
 `assets/templates/colors.css` for the available `{color}`, `{background}`,
 `{background.alpha}` … substitutions.
 
+## Applying the generated colors
+
+By default ruwall writes the OSC escape sequences to every open pseudo-terminal
+(`/dev/pts/*`) and saves a copy in `~/.cache/wal/sequences`. If your terminal
+doesn't pick them up (for example inside tmux or a Wayland-native terminal),
+apply them manually:
+
+```sh
+cat ~/.cache/wal/sequences
+```
+
+Do not use `-g` if you want the colors applied: it only generates the files.
+Likewise `-n`, `-s`, `-t` and `-e` skip the wallpaper, terminal sequences, TTY
+and environment reload respectively. A wallpaper setter must be installed for
+the wallpaper to change; see the optional dependencies above.
+
 ## Development
 
 ```sh
@@ -108,7 +140,7 @@ cargo test
 ```
 
 The source is split into modules mirroring the original pywal package:
-`settings`, `util`, `theme`, `image`, `backend` (kmeans), `colors`,
+`settings`, `util`, `theme`, `image`, `backend` (median-cut/kmeans), `colors`,
 `sequences`, `export`, `wallpaper`, `reload` and the CLI entry point `main`.
 
 ## License
